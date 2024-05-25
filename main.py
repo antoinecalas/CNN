@@ -1,11 +1,22 @@
 from CNN import *
+import cv2
 
-Cnn = CNN(True)
-Cnn.AddConvLayer(3,2)
-Cnn.AddConvLayer(3,4)
-Cnn.AddConvLayer(3,1)
-Cnn.AddFullyConnectedLayer(2)
+image = [[[0,1,0,0,0],
+         [0,1,0,0,0],
+         [0,0,0,1,0],
+         [0,0,0,1,0],
+         [0,0,0,0,0]]]
+image = cv2.imread("1.png",cv2.IMREAD_GRAYSCALE )
+image = [np.array(cv2.normalize(image,None,norm_type=cv2.NORM_MINMAX))]
+#print(image)
+Cnn = CNN(True,len(image[0]))
+Cnn.AddConvLayer(3,16)
+#Cnn.AddConvLayer(3,3)
+#Cnn.AddConvLayer(3,1,2)
+Cnn.AddFlattenLayer()
+Cnn.AddFullyConnectedLayer(16,relu)
+Cnn.AddFullyConnectedLayer(10,softmax)
+#print(Cnn)
 
-Cnn.Run(np.array([1,2,0,0,3]))
+Cnn.Train(image,1,[1,0,0,0,0,0,0,0,0,0])
 
-print(Cnn)
