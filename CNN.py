@@ -1,10 +1,21 @@
 from pickle import NONE
 import numpy as np
 import random
+from mnist import MNIST
 
 def relu(x):
     #print("relu used")
     return np.maximum(0, x)
+
+def ReluDerived(x):
+    output =[]
+    for value in x:
+        if value>0:
+            output.append(1)
+        else :
+            output.append(0)
+    return np.array([output])
+
 
 def initialize_weights(shape):
     
@@ -37,7 +48,7 @@ class ConvLayer:
         return(x)
     
     def GetOutputSize(self):
-        print("cov output: ",self.output_image_size*self.output_image_size)
+        #print("cov output: ",self.output_image_size*self.output_image_size)
         return self.output_image_size*self.output_image_size
     
     def ComputeLayer(self,input):
@@ -92,16 +103,42 @@ class FullyConnectedLayer:
 
 
     def ComputeLayer(self,inputs):#------------------------------------------------------need to add a func and a bias
-        
+        #print(inputs)
         output = np.zeros(self.nb_neurons)
         for j, weights in enumerate(self.weights):
             #print(weights,"  ")
             for i, weight in enumerate(weights):
+            
                 output[j] += inputs[i]*weight
         #print(self.activation_function,"FC output :\n untouched : ",output,"\n after fct :",self.activation_function(output))
-        print("FC computed")
+        
         self.output = self.activation_function(output)
+        #print("FC computed : ")
         return self.output
+    
+    def UpdateWeights(self,prior_activation,error,learning_rate):
+        #print("-------------------------------------------------------------")
+        #print("_____self output______________\n ",self.output)
+        #print("_______errror input_______\n ",error)
+        #print("_______prior activation_____\n",prior_activation)
+
+        #if self.activation_function == relu :
+        #    print(ReluDerived(self.output))
+        #    layer_error = np.dot(error,ReluDerived(self.output))
+        #elif self.activation_function == softmax:
+        layer_error = error
+        #print(layer_error)
+        
+
+        layer_gradient = np.dot(layer_error,[prior_activation])
+        #print("           !!!gradient !!!\n",layer_gradient,"\n")
+        #print("\n           !!!self.weights !!!\n",self.weights)
+        self.weights = self.weights - learning_rate*layer_gradient
+        #print("\n           !!!self.weights !!!\n",self.weights)
+        next_layer_error = np.dot(self.weights.T,layer_error)
+        #print("\n           !!!next layer error !!!\n",next_layer_error)
+        return next_layer_error
+
 
 class FlattenLayer:
     def __init__(self,input_size,index):
@@ -117,9 +154,12 @@ class FlattenLayer:
         return self.size
     
     def ComputeLayer(self,input):
-        print("flatten computed")
+        #print("flatten computed")
         self.output = input.flatten()
         return self.output
+    
+    def UpdateWeights(self,prior_activation,error,learning_rate):
+        return error
 
 class CNN:
     def __init__(self,show_weights_flag,image_size):
@@ -136,9 +176,13 @@ class CNN:
         return ""    
 
     def AddFullyConnectedLayer(self,nb_neurons,activation_function):
-        self.model.append(FullyConnectedLayer(nb_neurons,self.model[-1].GetOutputSize(),len(self.model),activation_function))
-        print(f"--- Fully connected layer ({nb_neurons} neurons)added succesfully with input {nb_neurons,self.model[-2].GetOutputSize()}---")
-
+        if self.model:
+            self.model.append(FullyConnectedLayer(nb_neurons,self.model[-1].GetOutputSize(),len(self.model),activation_function))
+            print(f"--- Fully connected layer ({nb_neurons} neurons)added succesfully with input {nb_neurons,self.model[-2].GetOutputSize()}---")
+        else : 
+            self.model.append(FullyConnectedLayer(nb_neurons,self.image_size*self.image_size,len(self.model),activation_function))
+            print(f"--- Fully connected layer ({nb_neurons} neurons)added succesfully with input {self.image_size}---")
+        
     def AddConvLayer(self,size,nb_filter):
         if self.model:
             self.model.append(ConvLayer(nb_filter,size,self.model[-1].GetOutputChannels(),self.model[-1].GetOutputSize(),len(self.model)))
@@ -147,36 +191,56 @@ class CNN:
         print(f"--- {nb_filter} filters, {size}*{size} Convolutionnal layer added succesfully---")
 
     def AddFlattenLayer(self):
-        print(self.model[-1].GetOutputSize())
-        self.model.append(FlattenLayer(self.model[-1].GetOutputSize(),len(self.model)))
-        print(f"--- Flatten layer added succesfully---")
+        if self.model:
+            print(self.model[-1].GetOutputSize())
+            self.model.append(FlattenLayer(self.model[-1].GetOutputSize(),len(self.model)))
+        else :
+            self.model.append(FlattenLayer(self.image_size*self.image_size,len(self.model)))
+        print("--- Flatten layer added succesfully---")
 
     def Run(self,input_layer):
         current_layer_value = input_layer
 
         for layer in self.model:
             current_layer_value = layer.ComputeLayer(current_layer_value)
+            #print(current_layer_value)
 
         #print("\n\n output :\n",current_layer_value)
         return current_layer_value
 
-    def Train(self,training_data,epoch,solution,learning_rate = 0.01):
-        output = self.Run(training_data)
-        nb_layers = len(self.model)
+    def Train(self,training_data,nb_epoch,batch_size = 300,learning_rate = 0.01):
 
-        for i in range(1,nb_layers+1):
-            index = nb_layers-i
-            #print(index,self.model[index])
-            #print("output of layer = ", self.model[index].output)
-            quad_error = sum([pow(truth-value,2) for value,truth in zip(self.model[index].output,solution)])
-            print(quad_error)
-            #layer.BackPropagate(quad_error,learning_rate)
-        """ nsamples = 1000
-        for i in range(epoch):
-            loss += sum([truth*np.log(value) for value,truth in zip(output,solution)])
-            print("output = ",output)
-            print("loss = ",loss)
-        loss = loss /nsamples """
+        mndata = MNIST(training_data)
+        images, labels = mndata.load_training()
+        index = random.randrange(0, len(images))  # choose an index ;-)
+        expected_output = np.zeros(10)
+        nb_layers = len(self.model)
+        
+
+        for epoch in range(nb_epoch):
+            error_term = np.zeros(10)
+            for i_batch in range(batch_size):
+                index_training = random.randrange(0, len(images))
+                expected_output[labels[index_training]] = 1
+                output = self.Run(np.reshape(images[index_training],(28,28)))
+                
+                
+                #print(output,expected_output)
+                u = (output-expected_output)*2
+                error_term += u
+                
+                expected_output[labels[index_training]] = 0
+                
+            print("error  : ",np.around(error_term/batch_size,2))
+                
+            error_term = np.around(np.array([error_term/batch_size]).T,4)
+            for i in range(1,nb_layers):
+                index = nb_layers-i
+                #print(index,self.model[index])
+                #print("output of layer = ", self.model[index].output)
+                error_term = self.model[index].UpdateWeights(self.model[index-1].output,error_term,learning_rate)    
+            self.model[0].UpdateWeights(training_data,error_term,learning_rate)
+
 
 
 
