@@ -7,6 +7,9 @@ def relu(x):
     #print("relu used")
     return np.maximum(0, x)
 
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
 def ReluDerived(x):
     output =[]
     for value in x:
@@ -19,9 +22,7 @@ def ReluDerived(x):
 
 def initialize_weights(shape):
     
-    fan_in = shape[0]  # Number of input units
-    std = np.sqrt(2.0 / fan_in)
-    return np.random.normal(0, std, size=shape)
+    return np.random.normal(0, 1, size=shape)
 
 def softmax(z):
     #print("softmax used")
@@ -92,9 +93,13 @@ class FullyConnectedLayer:
     def __str__(self):
         x = "                 "
         x = x[self.nb_neurons:]
+        y = x[self.nb_neurons:]
         for i in range(self.nb_neurons) :
             x += "O "
+            y += f"|{self.weights[i][0]:.2f}"
+            
         print(x)
+        print(y)
         return("")
 
     def GetOutputSize(self):
@@ -127,7 +132,7 @@ class FullyConnectedLayer:
         #    layer_error = np.dot(error,ReluDerived(self.output))
         #elif self.activation_function == softmax:
         layer_error = error
-        #print(layer_error)
+        print("weight error : ",layer_error.T)
         
 
         layer_gradient = np.dot(layer_error,[prior_activation])
@@ -146,7 +151,7 @@ class FlattenLayer:
         self.size = input_size
     
     def __str__(slef):
-        print("           |flatten|")
+        print("             |flatten|")
         return("")
     
     def GetOutputSize(self):
@@ -203,12 +208,12 @@ class CNN:
 
         for layer in self.model:
             current_layer_value = layer.ComputeLayer(current_layer_value)
-            #print(current_layer_value)
+            print(current_layer_value)
 
         #print("\n\n output :\n",current_layer_value)
         return current_layer_value
 
-    def Train(self,training_data,nb_epoch,batch_size = 300,learning_rate = 0.01):
+    def Train(self,training_data,nb_epoch,batch_size = 1,learning_rate = 0.01):
 
         mndata = MNIST(training_data)
         images, labels = mndata.load_training()
@@ -218,22 +223,26 @@ class CNN:
         
 
         for epoch in range(nb_epoch):
-            error_term = np.zeros(10)
+            error_term = np.zeros(3)
             for i_batch in range(batch_size):
                 index_training = random.randrange(0, len(images))
-                expected_output[labels[index_training]] = 1
-                output = self.Run(np.reshape(images[index_training],(28,28)))
+                #expected_output[labels[index_training]] = 1
                 
+                #output = self.Run(np.reshape(images[index_training],(28,28)))
+                output = self.Run(np.array([[2,5]]))
+                #print(output)
+                expected_output = [1,0,0]
                 
                 #print(output,expected_output)
                 u = (output-expected_output)*2
                 error_term += u
                 
-                expected_output[labels[index_training]] = 0
+                #expected_output[labels[index_training]] = 0
                 
-            print("error  : ",np.around(error_term/batch_size,2))
+            
                 
             error_term = np.around(np.array([error_term/batch_size]).T,4)
+            print(f"output : {np.around(output,2)}  error  : {np.around(error_term,2)}")
             for i in range(1,nb_layers):
                 index = nb_layers-i
                 #print(index,self.model[index])
